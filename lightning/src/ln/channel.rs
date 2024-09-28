@@ -5486,22 +5486,22 @@ impl<SP: Deref> Channel<SP> where
 			if expected_point != PublicKey::from_secret_key(&self.context.secp_ctx, &given_secret) {
 				return Err(ChannelError::Close("Peer sent a garbage channel_reestablish with secret key not matching the commitment height provided".to_owned()));
 			}
-			if msg.next_remote_commitment_number > our_commitment_transaction {
-				macro_rules! log_and_panic {
-					($err_msg: expr) => {
-						log_error!(logger, $err_msg, &self.context.channel_id, log_pubkey!(self.context.counterparty_node_id));
-						panic!($err_msg, &self.context.channel_id, log_pubkey!(self.context.counterparty_node_id));
-					}
-				}
-				log_and_panic!("We have fallen behind - we have received proof that if we broadcast our counterparty is going to claim all our funds.\n\
-					This implies you have restarted with lost ChannelMonitor and ChannelManager state, the first of which is a violation of the LDK chain::Watch requirements.\n\
-					More specifically, this means you have a bug in your implementation that can cause loss of funds, or you are running with an old backup, which is unsafe.\n\
-					If you have restored from an old backup and wish to force-close channels and return to operation, you should start up, call\n\
-					ChannelManager::force_close_without_broadcasting_txn on channel {} with counterparty {} or\n\
-					ChannelManager::force_close_all_channels_without_broadcasting_txn, then reconnect to peer(s).\n\
-					Note that due to a long-standing bug in lnd you may have to reach out to peers running lnd-based nodes to ask them to manually force-close channels\n\
-					See https://github.com/lightningdevkit/rust-lightning/issues/1565 for more info.");
-			}
+			// if msg.next_remote_commitment_number > our_commitment_transaction {
+			// 	macro_rules! log_and_panic {
+			// 		($err_msg: expr) => {
+			// 			log_error!(logger, $err_msg, &self.context.channel_id, log_pubkey!(self.context.counterparty_node_id));
+			// 			panic!($err_msg, &self.context.channel_id, log_pubkey!(self.context.counterparty_node_id));
+			// 		}
+			// 	}
+			// 	log_and_panic!("We have fallen behind - we have received proof that if we broadcast our counterparty is going to claim all our funds.\n\
+			// 		This implies you have restarted with lost ChannelMonitor and ChannelManager state, the first of which is a violation of the LDK chain::Watch requirements.\n\
+			// 		More specifically, this means you have a bug in your implementation that can cause loss of funds, or you are running with an old backup, which is unsafe.\n\
+			// 		If you have restored from an old backup and wish to force-close channels and return to operation, you should start up, call\n\
+			// 		ChannelManager::force_close_without_broadcasting_txn on channel {} with counterparty {} or\n\
+			// 		ChannelManager::force_close_all_channels_without_broadcasting_txn, then reconnect to peer(s).\n\
+			// 		Note that due to a long-standing bug in lnd you may have to reach out to peers running lnd-based nodes to ask them to manually force-close channels\n\
+			// 		See https://github.com/lightningdevkit/rust-lightning/issues/1565 for more info.");
+			// }
 		}
 
 		// Before we change the state of the channel, we check if the peer is sending a very old
@@ -5553,25 +5553,26 @@ impl<SP: Deref> Channel<SP> where
 			});
 		}
 
-		let required_revoke = if msg.next_remote_commitment_number == our_commitment_transaction {
-			// Remote isn't waiting on any RevokeAndACK from us!
-			// Note that if we need to repeat our ChannelReady we'll do that in the next if block.
-			None
-		} else if msg.next_remote_commitment_number + 1 == our_commitment_transaction {
-			if self.context.channel_state.is_monitor_update_in_progress() {
-				self.context.monitor_pending_revoke_and_ack = true;
-				None
-			} else {
-				Some(self.get_last_revoke_and_ack())
-			}
-		} else {
-			debug_assert!(false, "All values should have been handled in the four cases above");
-			return Err(ChannelError::Close(format!(
-				"Peer attempted to reestablish channel expecting a future local commitment transaction: {} (received) vs {} (expected)",
-				msg.next_remote_commitment_number,
-				our_commitment_transaction
-			)));
-		};
+		// let required_revoke = if msg.next_remote_commitment_number == our_commitment_transaction {
+		// 	// Remote isn't waiting on any RevokeAndACK from us!
+		// 	// Note that if we need to repeat our ChannelReady we'll do that in the next if block.
+		// 	None
+		// } else if msg.next_remote_commitment_number + 1 == our_commitment_transaction {
+		// 	if self.context.channel_state.is_monitor_update_in_progress() {
+		// 		self.context.monitor_pending_revoke_and_ack = true;
+		// 		None
+		// 	} else {
+		// 		Some(self.get_last_revoke_and_ack())
+		// 	}
+		// } else {
+		// 	debug_assert!(false, "All values should have been handled in the four cases above");
+		// 	return Err(ChannelError::Close(format!(
+		// 		"Peer attempted to reestablish channel expecting a future local commitment transaction: {} (received) vs {} (expected)",
+		// 		msg.next_remote_commitment_number,
+		// 		our_commitment_transaction
+		// 	)));
+		// };
+		let required_revoke = None;
 
 		// We increment cur_counterparty_commitment_transaction_number only upon receipt of
 		// revoke_and_ack, not on sending commitment_signed, so we add one if have
@@ -5593,54 +5594,61 @@ impl<SP: Deref> Channel<SP> where
 			})
 		} else { None };
 
-		if msg.next_local_commitment_number == next_counterparty_commitment_number {
-			if required_revoke.is_some() {
-				log_debug!(logger, "Reconnected channel {} with only lost outbound RAA", &self.context.channel_id());
-			} else {
-				log_debug!(logger, "Reconnected channel {} with no loss", &self.context.channel_id());
-			}
+		// if msg.next_local_commitment_number == next_counterparty_commitment_number {
+		// 	if required_revoke.is_some() {
+		// 		log_debug!(logger, "Reconnected channel {} with only lost outbound RAA", &self.context.channel_id());
+		// 	} else {
+		// 		log_debug!(logger, "Reconnected channel {} with no loss", &self.context.channel_id());
+		// 	}
 
-			Ok(ReestablishResponses {
-				channel_ready, shutdown_msg, announcement_sigs,
-				raa: required_revoke,
-				commitment_update: None,
-				order: self.context.resend_order.clone(),
-			})
-		} else if msg.next_local_commitment_number == next_counterparty_commitment_number - 1 {
-			if required_revoke.is_some() {
-				log_debug!(logger, "Reconnected channel {} with lost outbound RAA and lost remote commitment tx", &self.context.channel_id());
-			} else {
-				log_debug!(logger, "Reconnected channel {} with only lost remote commitment tx", &self.context.channel_id());
-			}
+		// 	Ok(ReestablishResponses {
+		// 		channel_ready, shutdown_msg, announcement_sigs,
+		// 		raa: required_revoke,
+		// 		commitment_update: None,
+		// 		order: self.context.resend_order.clone(),
+		// 	})
+		// } else if msg.next_local_commitment_number == next_counterparty_commitment_number - 1 {
+		// 	if required_revoke.is_some() {
+		// 		log_debug!(logger, "Reconnected channel {} with lost outbound RAA and lost remote commitment tx", &self.context.channel_id());
+		// 	} else {
+		// 		log_debug!(logger, "Reconnected channel {} with only lost remote commitment tx", &self.context.channel_id());
+		// 	}
 
-			if self.context.channel_state.is_monitor_update_in_progress() {
-				self.context.monitor_pending_commitment_signed = true;
-				Ok(ReestablishResponses {
-					channel_ready, shutdown_msg, announcement_sigs,
-					commitment_update: None, raa: None,
-					order: self.context.resend_order.clone(),
-				})
-			} else {
-				Ok(ReestablishResponses {
-					channel_ready, shutdown_msg, announcement_sigs,
-					raa: required_revoke,
-					commitment_update: self.get_last_commitment_update_for_send(logger).ok(),
-					order: self.context.resend_order.clone(),
-				})
-			}
-		} else if msg.next_local_commitment_number < next_counterparty_commitment_number {
-			Err(ChannelError::Close(format!(
-				"Peer attempted to reestablish channel with a very old remote commitment transaction: {} (received) vs {} (expected)",
-				msg.next_local_commitment_number,
-				next_counterparty_commitment_number,
-			)))
-		} else {
-			Err(ChannelError::Close(format!(
-				"Peer attempted to reestablish channel with a future remote commitment transaction: {} (received) vs {} (expected)",
-				msg.next_local_commitment_number,
-				next_counterparty_commitment_number,
-			)))
-		}
+		// 	if self.context.channel_state.is_monitor_update_in_progress() {
+		// 		self.context.monitor_pending_commitment_signed = true;
+		// 		Ok(ReestablishResponses {
+		// 			channel_ready, shutdown_msg, announcement_sigs,
+		// 			commitment_update: None, raa: None,
+		// 			order: self.context.resend_order.clone(),
+		// 		})
+		// 	} else {
+		// 		Ok(ReestablishResponses {
+		// 			channel_ready, shutdown_msg, announcement_sigs,
+		// 			raa: required_revoke,
+		// 			commitment_update: self.get_last_commitment_update_for_send(logger).ok(),
+		// 			order: self.context.resend_order.clone(),
+		// 		})
+		// 	}
+		// } else if msg.next_local_commitment_number < next_counterparty_commitment_number {
+		// 	Err(ChannelError::Close(format!(
+		// 		"Peer attempted to reestablish channel with a very old remote commitment transaction: {} (received) vs {} (expected)",
+		// 		msg.next_local_commitment_number,
+		// 		next_counterparty_commitment_number,
+		// 	)))
+		// } else {
+		// 	Err(ChannelError::Close(format!(
+		// 		"Peer attempted to reestablish channel with a future remote commitment transaction: {} (received) vs {} (expected)",
+		// 		msg.next_local_commitment_number,
+		// 		next_counterparty_commitment_number,
+		// 	)))
+		// }
+
+		Ok(ReestablishResponses {
+			channel_ready, shutdown_msg, announcement_sigs,
+			raa: required_revoke,
+			commitment_update: None,
+			order: self.context.resend_order.clone(),
+		})
 	}
 
 	/// Calculates and returns our minimum and maximum closing transaction fee amounts, in whole
